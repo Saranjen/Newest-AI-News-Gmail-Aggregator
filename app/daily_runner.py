@@ -1,8 +1,9 @@
 import logging
 from datetime import datetime
-from dotenv import load_dotenv
 
-load_dotenv()
+from app.load_env import load_project_env
+
+load_project_env()
 
 from app.runner import run_scrapers
 from app.services.process_anthropic import process_anthropic_markdown

@@ -65,5 +65,9 @@ class AnthropicScraper:
 if __name__ == "__main__":
     scraper = AnthropicScraper()
     articles: List[AnthropicArticle] = scraper.get_articles(hours=100)
-    markdown: str = scraper.url_to_markdown(articles[1].url)
-    print(markdown)
+    if not articles:
+        print("No recent articles in the time window.")
+    else:
+        article = articles[0]
+        md = scraper.url_to_markdown(article.url)
+        print(md if md is not None else "(conversion failed or empty)")
