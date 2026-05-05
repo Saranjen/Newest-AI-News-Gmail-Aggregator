@@ -14,8 +14,9 @@ Scrapes AI news sources, stores articles in Postgres, generates digests with Ope
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | Optional. Full Postgres URL (e.g. in GitHub Actions). **If this is set, it overrides all `POSTGRES_*` variables.** |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | Local Postgres when `DATABASE_URL` is unset or empty |
+| `DATABASE_URL` | Full Postgres URL. Used **on GitHub Actions** (where `GITHUB_ACTIONS=true`) or locally only if **`USE_DATABASE_URL=true`**. Otherwise ignored in favor of `POSTGRES_*`. |
+| `USE_DATABASE_URL` | Set to `true` on your machine if you want `DATABASE_URL` instead of `POSTGRES_*` for local runs. |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | Default for **local** runs (e.g. Docker on `localhost`) |
 | `OPENAI_API_KEY` | OpenAI API |
 | `EMAIL_SENDER` | Gmail address used to sign in to SMTP |
 | `EMAIL_RECIPIENT` | Where to send the digest (if omitted, defaults to the sender address) |
@@ -24,13 +25,9 @@ Scrapes AI news sources, stores articles in Postgres, generates digests with Ope
 
 Optional: `PROXY_USERNAME`, `PROXY_PASSWORD` for YouTube if you use a proxy.
 
-### After a merge: “it used to email / my DB had articles”
+**Local vs cloud:** You can keep `DATABASE_URL` in `.env` (for reference or for Actions) while using Docker: local runs use **`POSTGRES_*`** unless you set `USE_DATABASE_URL=true`. The digest job logs **`Database target: host=... db=...`** so you can confirm which database is used.
 
-The automation work introduced **`DATABASE_URL`**. If you added it to `.env` for GitHub Actions (e.g. Neon/Supabase) but still run **locally** against Docker Postgres, the app will use **`DATABASE_URL` first** — often an **empty or different** database — so you see **no stored articles**, **no recent digests**, and email can fail even though your old Docker DB still has data.
-
-**Fix for local runs:** remove or comment out `DATABASE_URL` in `.env`, or point it at the same instance you use with Docker. When you run `python -m app.jobs.daily_digest`, the first log line after startup includes **`Database target: host=... db=...`** (no password) so you can confirm which server you hit.
-
-Separately, the email step only loads digests whose **`created_at` is within the last 24 hours**; older digests are ignored. Scrapers only keep items whose **RSS publish time** is inside that same window.
+The email step only loads digests whose **`created_at` is within the last 24 hours**; older digests are ignored. Scrapers only keep items whose **RSS publish time** is inside that same window.
 
 ## Automation (GitHub Actions)
 
@@ -43,7 +40,7 @@ In the repository on GitHub: **Settings → Secrets and variables → Actions �
 | Secret | Description |
 |--------|-------------|
 | `OPENAI_API_KEY` | OpenAI API key |
-| `DATABASE_URL` | Postgres connection string (`postgresql://...` or `postgres://...`) |
+| `DATABASE_URL` | Hosted Postgres URL (must be reachable from the internet). GitHub sets `GITHUB_ACTIONS`, so this URL is picked automatically in the workflow. |
 | `EMAIL_SENDER` | Gmail address that sends the mail |
 | `EMAIL_RECIPIENT` | Inbox that receives the digest |
 | `GMAIL_APP_PASSWORD` | Gmail [app password](https://support.google.com/accounts/answer/185833) |

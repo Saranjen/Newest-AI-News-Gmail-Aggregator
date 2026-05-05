@@ -9,8 +9,17 @@ load_project_env()
 
 
 def get_database_url() -> str:
-    url = os.getenv("DATABASE_URL")
-    if url:
+    """Resolve DB URL.
+
+    - **Local (default):** use `POSTGRES_*` even if `DATABASE_URL` is in `.env`, so a
+      cloud URL copied for GitHub docs does not override Docker Postgres.
+    - **GitHub Actions:** `GITHUB_ACTIONS=true` → use `DATABASE_URL` when set.
+    - **Force URL locally:** set `USE_DATABASE_URL=true` to use `DATABASE_URL`.
+    """
+    url = (os.getenv("DATABASE_URL") or "").strip()
+    in_github_actions = os.getenv("GITHUB_ACTIONS", "").lower() == "true"
+    use_database_url = os.getenv("USE_DATABASE_URL", "").lower() in ("1", "true", "yes")
+    if url and (in_github_actions or use_database_url):
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
         return url
