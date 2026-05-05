@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def default_pipeline_hours() -> int:
-    """Scrape + email digest lookback; override with PIPELINE_HOURS (1–336, default 24)."""
+    """RSS scrape lookback; override with PIPELINE_HOURS (1–336, default 24)."""
     raw = (os.getenv("PIPELINE_HOURS") or "24").strip()
     try:
         h = int(raw)
@@ -31,16 +31,34 @@ def default_pipeline_hours() -> int:
     return max(1, min(h, 24 * 14))
 
 
+def email_digest_lookback_hours(scrape_hours: int) -> int:
+    """How far back to query `digests` for email (`created_at`). Independent of RSS scrape window.
+
+    Default: at least 72 hours so a quiet RSS day can still send digests created earlier.
+    Override with EMAIL_DIGEST_HOURS (1–336). Set to match scrape only, e.g. ``24``.
+    """
+    raw = (os.getenv("EMAIL_DIGEST_HOURS") or "").strip()
+    if raw:
+        try:
+            return max(1, min(int(raw), 24 * 14))
+        except ValueError:
+            pass
+    return max(1, min(max(scrape_hours, 72), 24 * 14))
+
+
 def run_daily_pipeline(hours: Optional[int] = None, top_n: int = 10) -> dict:
     if hours is None:
         hours = default_pipeline_hours()
+    email_hours = email_digest_lookback_hours(hours)
     start_time = datetime.now()
     logger.info("=" * 60)
     logger.info("Starting Daily AI News Aggregator Pipeline")
     logger.info("=" * 60)
     logger.info(
-        "Time window: last %d hours (scrape cutoff + digest email query; set PIPELINE_HOURS to change)",
+        "RSS scrape window: last %d hours (PIPELINE_HOURS); digest email DB lookback: last %d hours "
+        "(EMAIL_DIGEST_HOURS or default max(scrape, 72))",
         hours,
+        email_hours,
     )
     
     results = {
@@ -83,7 +101,7 @@ def run_daily_pipeline(hours: Optional[int] = None, top_n: int = 10) -> dict:
                     f"({digest_result['failed']} failed out of {digest_result['total']} total)")
         
         logger.info("\n[5/5] Generating and sending email digest...")
-        email_result = send_digest_email(hours=hours, top_n=top_n)
+        email_result = send_digest_email(hours=email_hours, top_n=top_n)
         results["email"] = email_result
         
         if email_result["success"]:
@@ -94,8 +112,8 @@ def run_daily_pipeline(hours: Optional[int] = None, top_n: int = 10) -> dict:
             logger.error(f"✗ Failed to send email: {err}")
             if "No digests" in str(err):
                 logger.warning(
-                    "Hint: widen the window with PIPELINE_HOURS=168 (or check RSS returned items above); "
-                    "email only includes digests whose created_at falls in this same window."
+                    "Hint: widen digest email lookback with EMAIL_DIGEST_HOURS=168, or RSS scrape with "
+                    "PIPELINE_HOURS=168; digests must have created_at within the email lookback."
                 )
         
     except Exception as e:

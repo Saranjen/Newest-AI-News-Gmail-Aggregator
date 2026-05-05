@@ -22,13 +22,14 @@ Scrapes AI news sources, stores articles in Postgres, generates digests with Ope
 | `EMAIL_RECIPIENT` | Where to send the digest (if omitted, defaults to the sender address) |
 | `GMAIL_APP_PASSWORD` | Gmail app password for SMTP |
 | `MY_EMAIL`, `APP_PASSWORD` | Legacy aliases for sender and app password |
-| `PIPELINE_HOURS` | Lookback window (default **24**) for RSS scraping and for which digests are included in email (`created_at`). If you see `No digests available` but older digests exist, set **`PIPELINE_HOURS=168`** in `.env` or run once: `PIPELINE_HOURS=168 uv run python -m app.jobs.daily_digest`. Max **336** (14 days). |
+| `PIPELINE_HOURS` | RSS scrape lookback (default **24** hours, max **336**). Only affects which feed items are considered new. |
+| `EMAIL_DIGEST_HOURS` | How far back the **email** step queries the **`digests`** table (`created_at`). If unset, defaults to **max(`PIPELINE_HOURS`, 72)** so a day with no new RSS can still email digests from the last few days. Set **`24`** to match a strict 24h digest-only window. |
 
 Optional: `PROXY_USERNAME`, `PROXY_PASSWORD` for YouTube if you use a proxy.
 
 **Local vs cloud:** You can keep `DATABASE_URL` in `.env` (for reference or for Actions) while using Docker: local runs use **`POSTGRES_*`** unless you set `USE_DATABASE_URL=true`. The digest job logs **`Database target: host=... db=...`** so you can confirm which database is used.
 
-The email step loads digests whose **`created_at` falls within the same `PIPELINE_HOURS` window** as scraping. RSS items must be published inside that window to be scraped.
+The pipeline **always** runs the email step and queries the digest table; scrape emptiness does not skip that. RSS items must fall inside **`PIPELINE_HOURS`** to be scraped; existing digest rows must fall inside the **email lookback** above to be included in the mail.
 
 ## Automation (GitHub Actions)
 
