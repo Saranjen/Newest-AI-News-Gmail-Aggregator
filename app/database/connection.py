@@ -9,6 +9,11 @@ load_project_env()
 
 
 def get_database_url() -> str:
+    url = os.getenv("DATABASE_URL")
+    if url:
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        return url
     user = os.getenv("POSTGRES_USER", "postgres")
     password = os.getenv("POSTGRES_PASSWORD", "postgres")
     host = os.getenv("POSTGRES_HOST", "localhost")
