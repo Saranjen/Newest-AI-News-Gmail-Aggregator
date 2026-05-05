@@ -14,8 +14,8 @@ Scrapes AI news sources, stores articles in Postgres, generates digests with Ope
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | Optional. Full Postgres URL (e.g. in GitHub Actions). If unset, `POSTGRES_*` is used. |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | Local Postgres when `DATABASE_URL` is not set |
+| `DATABASE_URL` | Optional. Full Postgres URL (e.g. in GitHub Actions). **If this is set, it overrides all `POSTGRES_*` variables.** |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | Local Postgres when `DATABASE_URL` is unset or empty |
 | `OPENAI_API_KEY` | OpenAI API |
 | `EMAIL_SENDER` | Gmail address used to sign in to SMTP |
 | `EMAIL_RECIPIENT` | Where to send the digest (if omitted, defaults to the sender address) |
@@ -23,6 +23,14 @@ Scrapes AI news sources, stores articles in Postgres, generates digests with Ope
 | `MY_EMAIL`, `APP_PASSWORD` | Legacy aliases for sender and app password |
 
 Optional: `PROXY_USERNAME`, `PROXY_PASSWORD` for YouTube if you use a proxy.
+
+### After a merge: “it used to email / my DB had articles”
+
+The automation work introduced **`DATABASE_URL`**. If you added it to `.env` for GitHub Actions (e.g. Neon/Supabase) but still run **locally** against Docker Postgres, the app will use **`DATABASE_URL` first** — often an **empty or different** database — so you see **no stored articles**, **no recent digests**, and email can fail even though your old Docker DB still has data.
+
+**Fix for local runs:** remove or comment out `DATABASE_URL` in `.env`, or point it at the same instance you use with Docker. When you run `python -m app.jobs.daily_digest`, the first log line after startup includes **`Database target: host=... db=...`** (no password) so you can confirm which server you hit.
+
+Separately, the email step only loads digests whose **`created_at` is within the last 24 hours**; older digests are ignored. Scrapers only keep items whose **RSS publish time** is inside that same window.
 
 ## Automation (GitHub Actions)
 

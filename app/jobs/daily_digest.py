@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from urllib.parse import urlparse
 
 from app.load_env import load_project_env
 
@@ -21,11 +22,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _log_database_target(url: str) -> None:
+    """Log host/db name only (no credentials)."""
+    try:
+        normalized = url.replace("postgresql+psycopg2://", "postgresql://", 1)
+        parsed = urlparse(normalized)
+        host = parsed.hostname or "?"
+        port = parsed.port
+        db = (parsed.path or "/").strip("/").split("/")[0] or "?"
+        if port:
+            logger.info("Database target: host=%s port=%s db=%s", host, port, db)
+        else:
+            logger.info("Database target: host=%s db=%s", host, db)
+    except Exception:
+        logger.info("Database target: (unable to parse DATABASE_URL / connection string)")
+
+
 def main() -> int:
     logger.info("Daily digest job started")
     try:
-        from app.database.connection import engine
+        from app.database.connection import engine, get_database_url
         from app.database.models import Base
+
+        _log_database_target(get_database_url())
 
         Base.metadata.create_all(bind=engine)
         logger.info("Database schema ensured")
