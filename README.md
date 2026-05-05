@@ -33,7 +33,9 @@ The pipeline **always** runs the email step and queries the digest table; scrape
 
 ## Automation (GitHub Actions)
 
-The workflow [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) runs **once per day** at **13:00 UTC** (`cron: "0 13 * * *"`) and supports **manual** runs. It runs `pip install -r requirements.txt` then `python -m app.jobs.daily_digest`.
+**Idea:** Provision a **PostgreSQL** database on a **host reachable from the internet** (any managed provider or your own server with a public hostname). Once it exists, the provider gives you a **connection string** (a single URI, usually starting with `postgresql://` or `postgres://`). Put that value in GitHub as the **`DATABASE_URL` secret** together with your OpenAI and Gmail secrets. The workflow in [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) then runs **once per day** at the time set in the file (**13:00 UTC** by default, via `cron: "0 13 * * *"`) and executes the full digest pipeline so **email generation and sending happen automatically** on that schedule—no laptop required.
+
+The workflow runs `pip install -r requirements.txt` then `python -m app.jobs.daily_digest`, and also supports **manual** runs from the Actions tab.
 
 ### Setting it up (checklist)
 
