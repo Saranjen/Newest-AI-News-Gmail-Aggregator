@@ -5,7 +5,7 @@ Scrapes AI news sources, stores articles in Postgres, generates digests with Ope
 ## Local setup
 
 1. Install dependencies (e.g. `uv sync` from `pyproject.toml`, or `pip install -r requirements.txt`).
-2. Copy or create a `.env` in the repo root with your Postgres and API settings (see below).
+2. Copy [`.env.example`](.env.example) to `.env` and fill in secrets: `cp .env.example .env`
 3. Create tables: `python app/database/create_tables.py`
 4. Run the pipeline once: `python main.py`  
    Or use the automation entrypoint: `python -m app.jobs.daily_digest`
