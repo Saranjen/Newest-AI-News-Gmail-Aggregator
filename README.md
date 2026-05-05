@@ -33,26 +33,40 @@ The pipeline **always** runs the email step and queries the digest table; scrape
 
 ## Automation (GitHub Actions)
 
-The workflow [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) runs **once per day** on a cron schedule (13:00 UTC by default) and can be run **manually** from the Actions tab (**Run workflow**).
+The workflow [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) runs **once per day** at **13:00 UTC** (`cron: "0 13 * * *"`) and supports **manual** runs. It runs `pip install -r requirements.txt` then `python -m app.jobs.daily_digest`.
 
-### Required GitHub Secrets
+### Setting it up (checklist)
 
-In the repository on GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Add:
+1. **Put the workflow on your default branch**  
+   GitHub only runs `schedule` from **`main`** or **`master`** (whatever is default). Merge or push so `.github/workflows/daily-news.yml` exists on that branch.
 
-| Secret | Description |
-|--------|-------------|
-| `OPENAI_API_KEY` | OpenAI API key |
-| `DATABASE_URL` | Hosted Postgres URL (must be reachable from the internet). GitHub sets `GITHUB_ACTIONS`, so this URL is picked automatically in the workflow. |
-| `EMAIL_SENDER` | Gmail address that sends the mail |
-| `EMAIL_RECIPIENT` | Inbox that receives the digest |
-| `GMAIL_APP_PASSWORD` | Gmail [app password](https://support.google.com/accounts/answer/185833) |
+2. **Create hosted Postgres** (GitHub cannot use `localhost` on your laptop)  
+   Use something like [Neon](https://neon.tech), [Supabase](https://supabase.com), [Railway](https://railway.app), or [Render](https://render.com/docs/postgresql) and create a database. Copy the **connection URI** (usually `postgresql://` or `postgres://`).  
+   - If the provider requires TLS, append **`?sslmode=require`** to the URL if their docs say so.  
+   - Allow **connections from the internet** (not “localhost only”). Many free tiers allow all IPs by default.
 
-The job installs dependencies from `requirements.txt`, then runs:
+3. **Add repository secrets**  
+   On GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Create each name **exactly** as below (names are case-sensitive):
 
-```bash
-python -m app.jobs.daily_digest
-```
+| Secret | What to paste |
+|--------|----------------|
+| `OPENAI_API_KEY` | Your OpenAI API key |
+| `DATABASE_URL` | The **hosted** Postgres URI (not `localhost`) |
+| `EMAIL_SENDER` | Gmail address used to sign in to SMTP |
+| `EMAIL_RECIPIENT` | Address that should receive the digest |
+| `GMAIL_APP_PASSWORD` | Gmail [app password](https://support.google.com/accounts/answer/185833) for `EMAIL_SENDER` |
 
-Logs in Actions show when the job **starts**, **finishes**, or **fails** (including stack traces on errors).
+Your laptop **`.env` is not used** in Actions; only these secrets (and the workflow `env` block) apply.
 
-**Branch:** workflows run from the default branch unless you change the file; merge `Daily_Automation` (or your working branch) into `main`/`master` so the schedule applies to the workflow version you want.
+4. **Smoke-test with a manual run**  
+   **Actions → “Daily news digest” → Run workflow →** choose your **default** branch → **Run workflow**. Open the run → **digest** → **Run daily digest** and read the log. Fix any connection or auth errors before relying on the schedule.
+
+5. **Scheduled runs**  
+   After a successful manual run, the same workflow will run daily on the cron above. There can be small delays around the scheduled minute; that is normal on GitHub.
+
+**Note:** The Actions database is **separate** from local Docker. Data does not sync unless you migrate or point both at the same cloud DB on purpose. The job creates tables if missing (`create_all` in the digest entrypoint).
+
+### Optional workflow tweaks
+
+- Change schedule: edit `cron` in [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) (times are **UTC**).  
+- RSS lookback in CI: the workflow sets `PIPELINE_HOURS: "72"`; adjust or remove in the YAML if you want different behavior.
