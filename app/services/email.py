@@ -8,28 +8,43 @@ import markdown
 
 load_dotenv()
 
-MY_EMAIL = os.getenv("MY_EMAIL")
-APP_PASSWORD = os.getenv("APP_PASSWORD")
+
+def _smtp_sender() -> str:
+    return (os.getenv("EMAIL_SENDER") or os.getenv("MY_EMAIL") or "").strip()
+
+
+def _smtp_password() -> str:
+    return (os.getenv("GMAIL_APP_PASSWORD") or os.getenv("APP_PASSWORD") or "").strip()
+
+
+def _default_recipients() -> list[str]:
+    explicit = (os.getenv("EMAIL_RECIPIENT") or "").strip()
+    if explicit:
+        return [explicit]
+    sender = _smtp_sender()
+    if sender:
+        return [sender]
+    raise ValueError("Set EMAIL_RECIPIENT or EMAIL_SENDER/MY_EMAIL for recipients")
 
 
 def send_email(subject: str, body_text: str, body_html: str = None, recipients: list = None):
+    sender = _smtp_sender()
+    password = _smtp_password()
+    if not sender:
+        raise ValueError("EMAIL_SENDER or MY_EMAIL must be set")
+    if not password:
+        raise ValueError("GMAIL_APP_PASSWORD or APP_PASSWORD must be set")
+
     if recipients is None:
-        if not MY_EMAIL:
-            raise ValueError("MY_EMAIL environment variable is not set")
-        recipients = [MY_EMAIL]
-    
+        recipients = _default_recipients()
+
     recipients = [r for r in recipients if r is not None]
     if not recipients:
         raise ValueError("No valid recipients provided")
-    
-    if not MY_EMAIL:
-        raise ValueError("MY_EMAIL environment variable is not set")
-    if not APP_PASSWORD:
-        raise ValueError("APP_PASSWORD environment variable is not set")
-    
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = MY_EMAIL
+    msg["From"] = sender
     msg["To"] = ", ".join(recipients)
     
     part1 = MIMEText(body_text, "plain")
@@ -40,8 +55,8 @@ def send_email(subject: str, body_text: str, body_html: str = None, recipients: 
         msg.attach(part2)
     
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(MY_EMAIL, APP_PASSWORD)
-        smtp.sendmail(MY_EMAIL, recipients, msg.as_string())
+        smtp.login(sender, password)
+        smtp.sendmail(sender, recipients, msg.as_string())
 
 
 def markdown_to_html(markdown_text: str) -> str:
@@ -234,9 +249,7 @@ def digest_to_html(digest_response) -> str:
 
 
 def send_email_to_self(subject: str, body: str):
-    if not MY_EMAIL:
-        raise ValueError("MY_EMAIL environment variable is not set. Please set it in your .env file.")
-    send_email(subject, body, recipients=[MY_EMAIL])
+    send_email(subject, body, recipients=_default_recipients())
 
 
 if __name__ == "__main__":
