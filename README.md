@@ -84,8 +84,24 @@ Declared in [`pyproject.toml`](pyproject.toml) (and mirrored in [`requirements.t
 
 ## Local setup
 
-1. Install dependencies: `uv sync` (from `pyproject.toml`) or `pip install -r requirements.txt`.
-2. Copy [`.env.example`](.env.example) to `.env` and fill in values: `cp .env.example .env`
+1. Clone the repository and install dependencies: `uv sync` (from `pyproject.toml`) or `pip install -r requirements.txt`.
+2. **Create a `.env` file** in the repository root (same folder as `pyproject.toml`). Add the variables listed under [Environment variables](#environment-variables) — at minimum the keys in the skeleton below, then fill in real values for your OpenAI key, Gmail, and Postgres.
+
+```env
+OPENAI_API_KEY=
+MY_EMAIL=
+APP_PASSWORD=
+DATABASE_URL=
+USE_DATABASE_URL=
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=ai_news_aggregator
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5433
+```
+
+Leave `DATABASE_URL` empty and `USE_DATABASE_URL` unset or empty for typical **local Docker** use (the app uses `POSTGRES_*`). See the table for details.
+
 3. Start Postgres (e.g. `docker compose -f docker/docker-compose.yml up -d`).
 4. Create tables: `python app/database/create_tables.py`
 5. Run the pipeline: `python main.py` or `python -m app.jobs.daily_digest`
@@ -96,7 +112,7 @@ Declared in [`pyproject.toml`](pyproject.toml) (and mirrored in [`requirements.t
 
 ### `.env` (local)
 
-Use a `.env` file in the repo root (see [`.env.example`](.env.example)). Typical keys:
+After cloning, create **`.env`** in the repo root. It should contain the following keys (values explained in the table):
 
 | Variable | Purpose |
 |----------|---------|
