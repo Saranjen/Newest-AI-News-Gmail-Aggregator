@@ -1,5 +1,7 @@
 import logging
+import os
 from datetime import datetime
+from typing import Optional
 
 from app.load_env import load_project_env
 
@@ -19,11 +21,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run_daily_pipeline(hours: int = 24, top_n: int = 10) -> dict:
+def default_pipeline_hours() -> int:
+    """Scrape + email digest lookback; override with PIPELINE_HOURS (1–336, default 24)."""
+    raw = (os.getenv("PIPELINE_HOURS") or "24").strip()
+    try:
+        h = int(raw)
+    except ValueError:
+        return 24
+    return max(1, min(h, 24 * 14))
+
+
+def run_daily_pipeline(hours: Optional[int] = None, top_n: int = 10) -> dict:
+    if hours is None:
+        hours = default_pipeline_hours()
     start_time = datetime.now()
     logger.info("=" * 60)
     logger.info("Starting Daily AI News Aggregator Pipeline")
     logger.info("=" * 60)
+    logger.info(
+        "Time window: last %d hours (scrape cutoff + digest email query; set PIPELINE_HOURS to change)",
+        hours,
+    )
     
     results = {
         "start_time": start_time.isoformat(),
@@ -72,7 +90,13 @@ def run_daily_pipeline(hours: int = 24, top_n: int = 10) -> dict:
             logger.info(f"✓ Email sent successfully with {email_result['articles_count']} articles")
             results["success"] = True
         else:
-            logger.error(f"✗ Failed to send email: {email_result.get('error', 'Unknown error')}")
+            err = email_result.get("error", "Unknown error")
+            logger.error(f"✗ Failed to send email: {err}")
+            if "No digests" in str(err):
+                logger.warning(
+                    "Hint: widen the window with PIPELINE_HOURS=168 (or check RSS returned items above); "
+                    "email only includes digests whose created_at falls in this same window."
+                )
         
     except Exception as e:
         logger.error(f"Pipeline failed with error: {e}", exc_info=True)
@@ -97,6 +121,14 @@ def run_daily_pipeline(hours: int = 24, top_n: int = 10) -> dict:
 
 
 if __name__ == "__main__":
-    result = run_daily_pipeline(hours=24, top_n=10)
+    import sys
+
+    h: Optional[int] = None
+    top = 10
+    if len(sys.argv) > 1:
+        h = int(sys.argv[1])
+    if len(sys.argv) > 2:
+        top = int(sys.argv[2])
+    result = run_daily_pipeline(hours=h, top_n=top)
     exit(0 if result["success"] else 1)
 

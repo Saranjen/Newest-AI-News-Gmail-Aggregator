@@ -26,4 +26,6 @@ jobs:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          # Wider window helps when feeds are quiet or digests were created earlier
+          PIPELINE_HOURS: "72"
         run: python -m app.jobs.daily_digest

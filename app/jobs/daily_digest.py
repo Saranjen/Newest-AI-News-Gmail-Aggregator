@@ -55,7 +55,7 @@ def main() -> int:
     try:
         from app.daily_runner import run_daily_pipeline
 
-        result = run_daily_pipeline(hours=24, top_n=10)
+        result = run_daily_pipeline(hours=None, top_n=10)
     except Exception:
         logger.exception("Daily digest job failed during pipeline execution")
         return 1
