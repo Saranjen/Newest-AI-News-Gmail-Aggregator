@@ -94,19 +94,34 @@ Declared in [`pyproject.toml`](pyproject.toml) (and mirrored in [`requirements.t
 
 ## Environment variables
 
+### `.env` (local)
+
+Use a `.env` file in the repo root (see [`.env.example`](.env.example)). Typical keys:
+
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | Used **on GitHub Actions** (`GITHUB_ACTIONS=true`) or locally only if **`USE_DATABASE_URL=true`**. Otherwise **`POSTGRES_*`** are used. |
-| `USE_DATABASE_URL` | Set to `true` to force `DATABASE_URL` on your machine. |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB` | Local / Docker Postgres (default host port in this repo’s compose: **5433**). |
-| `OPENAI_API_KEY` | OpenAI API |
-| `EMAIL_SENDER`, `EMAIL_RECIPIENT`, `GMAIL_APP_PASSWORD` | Gmail SMTP (recommended for CI and docs) |
-| `MY_EMAIL`, `APP_PASSWORD` | Legacy aliases for sender and app password |
-| `PIPELINE_HOURS` | RSS scrape lookback (default **24**, max **336**). |
-| `EMAIL_DIGEST_HOURS` | Digest rows considered for email (`created_at`). Default behavior: **max(`PIPELINE_HOURS`, 72)** unless set. |
-| `PROXY_USERNAME`, `PROXY_PASSWORD` | Optional proxy for YouTube transcripts |
+| `OPENAI_API_KEY` | OpenAI API key for digest, curation, and email agents. |
+| `MY_EMAIL` | Gmail address used as SMTP login and default “from” / recipient when `EMAIL_RECIPIENT` is unset. |
+| `APP_PASSWORD` | Gmail [app password](https://support.google.com/accounts/answer/185833) for `MY_EMAIL`. |
+| `DATABASE_URL` | Full Postgres URI. **Locally:** only used if `USE_DATABASE_URL=true` (otherwise ignored in favor of `POSTGRES_*`). **On GitHub Actions:** set as a secret; `GITHUB_ACTIONS=true` enables this URL. |
+| `USE_DATABASE_URL` | Set to `true` to connect using `DATABASE_URL` on your machine; omit or `false` to use `POSTGRES_*` only. |
+| `POSTGRES_USER` | Postgres user (e.g. `postgres`). |
+| `POSTGRES_PASSWORD` | Postgres password. |
+| `POSTGRES_DB` | Database name (e.g. `ai_news_aggregator`). |
+| `POSTGRES_HOST` | Host (e.g. `localhost`). |
+| `POSTGRES_PORT` | Host port; this repo’s Docker Compose defaults to **5433** on the host. |
 
 The digest job logs **`Database target: host=... db=...`** (no password) so you can confirm which database is used.
+
+**Alternative Gmail names (optional):** you can use `EMAIL_SENDER`, `EMAIL_RECIPIENT`, and `GMAIL_APP_PASSWORD` instead of / in addition to `MY_EMAIL` / `APP_PASSWORD`; the app prefers the `EMAIL_*` names when both are set. The **GitHub Actions** workflow uses the `EMAIL_*` / `GMAIL_APP_PASSWORD` secret names—set those in the repo to match, or align your secrets with what the workflow expects.
+
+### Optional
+
+| Variable | Purpose |
+|----------|---------|
+| `PIPELINE_HOURS` | RSS scrape lookback (default **24**, max **336**). |
+| `EMAIL_DIGEST_HOURS` | Digest rows considered for email (`created_at`). Default: **max(`PIPELINE_HOURS`, 72)** unless set. |
+| `PROXY_USERNAME`, `PROXY_PASSWORD` | Optional Webshare-style proxy for YouTube transcripts. |
 
 ---
 
