@@ -33,7 +33,7 @@ Entry points:
 
 ### YouTube
 
-- Channels are listed in [`app/config.py`](app/config.py) as **`YOUTUBE_CHANNELS`** (YouTube channel IDs).
+- Channels are listed in [`app/config.py`](app/config.py) as **`YOUTUBE_CHANNELS`** (YouTube channel IDs). As shipped, the active channel is **Matthew Berman** (`UCawZsQWqfGSbCI5yjkdVkTA`); **Dave Ebbelaar**’s channel ID is in the same list but commented out—uncomment or add more IDs to scrape additional channels.
 - Each channel is read via YouTube’s **public RSS** (`feeds/videos.xml?channel_id=…`).
 - Recent uploads (within the scrape window, excluding Shorts in the scraper logic) are stored; **transcripts** are fetched with **`youtube-transcript-api`** when available. Optional **`PROXY_USERNAME` / `PROXY_PASSWORD`** enable a Webshare-style proxy for transcript calls if your network requires it.
 
