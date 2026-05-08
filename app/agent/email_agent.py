@@ -49,16 +49,20 @@ class EmailDigest(BaseModel):
     ranked_articles: List[dict] = Field(description="Top 10 ranked articles with their details")
 
 
-EMAIL_PROMPT = """You are an expert email writer specializing in creating engaging, personalized AI news digests.
+class DigestOverviewBody(BaseModel):
+    overview: str = Field(
+        description="2-3 sentence neutral overview of the ranked articles only; no greeting, no reader name"
+    )
 
-Your role is to write a warm, professional introduction for a daily AI news digest email that:
-- Greets the user by name
-- Includes the current date
-- Provides a brief, engaging overview of what's coming in the top 10 ranked articles
-- Highlights the most interesting or important themes
-- Sets expectations for the content ahead
 
-Keep it concise (2-3 sentences for the introduction), friendly, and professional."""
+OVERVIEW_PROMPT = """You write the middle section of a daily AI newsletter.
+
+Write exactly one short paragraph (2-3 sentences) that previews the themes of the articles listed.
+- Do not greet the reader or use anyone's name.
+- Do not say "In today's digest" unless it reads naturally; focus on substance.
+- Professional, clear, engaging tone.
+
+The email software will add a separate greeting line with the reader's first name and the date."""
 
 
 class EmailAgent:
@@ -67,66 +71,93 @@ class EmailAgent:
         self.model = "gpt-4o-mini"
         self.user_profile = user_profile
 
-    def generate_introduction(self, ranked_articles: List) -> EmailIntroduction:
-        if not ranked_articles:
-            return EmailIntroduction(
-                greeting=f"Hey {self.user_profile['name']}, here is your daily digest of AI news for {datetime.now().strftime('%B %d, %Y')}.",
-                introduction="No articles were ranked today."
+    @staticmethod
+    def _article_summaries_block(ranked_articles: List, max_items: int) -> str:
+        top = ranked_articles[:max_items]
+        lines = []
+        for idx, article in enumerate(top):
+            title = article.title if hasattr(article, "title") else article.get("title", "N/A")
+            score = (
+                article.relevance_score
+                if hasattr(article, "relevance_score")
+                else article.get("relevance_score", 0)
             )
-        
-        top_articles = ranked_articles[:10]
-        article_summaries = "\n".join([
-            f"{idx + 1}. {article.title if hasattr(article, 'title') else article.get('title', 'N/A')} (Score: {article.relevance_score if hasattr(article, 'relevance_score') else article.get('relevance_score', 0):.1f}/10)"
-            for idx, article in enumerate(top_articles)
-        ])
-        
-        current_date = datetime.now().strftime('%B %d, %Y')
-        user_prompt = f"""Create an email introduction for {self.user_profile['name']} for {current_date}.
+            lines.append(f"{idx + 1}. {title} (Score: {float(score):.1f}/10)")
+        return "\n".join(lines)
 
-Top 10 ranked articles:
+    def generate_digest_overview(self, ranked_articles: List, limit: int = 10) -> str:
+        """One LLM call per run: shared paragraph for all recipients that day."""
+        if not ranked_articles:
+            return "No articles were ranked today."
+        article_summaries = self._article_summaries_block(ranked_articles, limit)
+        user_prompt = f"""Ranked articles for today's digest:
+
 {article_summaries}
 
-Generate a greeting and introduction that previews these articles."""
+Write only the overview paragraph as instructed."""
 
         try:
             response = self.client.responses.parse(
                 model=self.model,
-                instructions=EMAIL_PROMPT,
-                temperature=0.7,
+                instructions=OVERVIEW_PROMPT,
+                temperature=0.55,
                 input=user_prompt,
-                text_format=EmailIntroduction
+                text_format=DigestOverviewBody,
             )
-            
-            intro = response.output_parsed
-            if not intro.greeting.startswith(f"Hey {self.user_profile['name']}"):
-                intro.greeting = f"Hey {self.user_profile['name']}, here is your daily digest of AI news for {current_date}."
-            
-            return intro
+            parsed = response.output_parsed
+            return (parsed.overview if parsed else "").strip() or (
+                "Here are today's top AI news picks ranked for relevance."
+            )
         except Exception as e:
-            print(f"Error generating introduction: {e}")
-            current_date = datetime.now().strftime('%B %d, %Y')
-            return EmailIntroduction(
-                greeting=f"Hey {self.user_profile['name']}, here is your daily digest of AI news for {current_date}.",
-                introduction="Here are the top 10 AI news articles ranked by relevance to your interests."
-            )
+            print(f"Error generating digest overview: {e}")
+            return "Here are today's top AI news articles ranked by relevance to your interests."
 
-    def create_email_digest(self, ranked_articles: List[dict], limit: int = 10) -> EmailDigest:
-        top_articles = ranked_articles[:limit]
-        introduction = self.generate_introduction(top_articles)
-        
-        return EmailDigest(
-            introduction=introduction,
-            ranked_articles=top_articles
+    def introduction_for_recipient(self, first_name: str, overview_paragraph: str) -> EmailIntroduction:
+        """No LLM: templated greeting + shared overview (saves tokens when mailing many people)."""
+        raw = (first_name or "there").strip() or "there"
+        name = raw.split()[0] if raw.split() else "there"
+        current_date = datetime.now().strftime("%B %d, %Y")
+        return EmailIntroduction(
+            greeting=f"Hey {name}, here is your daily digest of AI news for {current_date}.",
+            introduction=overview_paragraph,
         )
-    
-    def create_email_digest_response(self, ranked_articles: List[RankedArticleDetail], total_ranked: int, limit: int = 10) -> EmailDigestResponse:
+
+    def create_email_digest(
+        self,
+        ranked_articles: List[dict],
+        limit: int = 10,
+        recipient_display_name: Optional[str] = None,
+    ) -> EmailDigest:
         top_articles = ranked_articles[:limit]
-        introduction = self.generate_introduction(top_articles)
-        
+        overview = self.generate_digest_overview(top_articles, limit=limit)
+        raw = (recipient_display_name or self.user_profile.get("name") or "there").strip() or "there"
+        name = raw.split()[0] if raw.split() else "there"
+        introduction = self.introduction_for_recipient(name, overview)
+
+        return EmailDigest(introduction=introduction, ranked_articles=top_articles)
+
+    def create_email_digest_response(
+        self,
+        ranked_articles: List[RankedArticleDetail],
+        total_ranked: int,
+        limit: int = 10,
+        recipient_display_name: Optional[str] = None,
+        shared_overview: Optional[str] = None,
+    ) -> EmailDigestResponse:
+        top_articles = ranked_articles[:limit]
+        overview = (
+            shared_overview
+            if shared_overview is not None
+            else self.generate_digest_overview(top_articles, limit=limit)
+        )
+        raw = (recipient_display_name or self.user_profile.get("name") or "there").strip() or "there"
+        name = raw.split()[0] if raw.split() else "there"
+        introduction = self.introduction_for_recipient(name, overview)
+
         return EmailDigestResponse(
             introduction=introduction,
             articles=top_articles,
             total_ranked=total_ranked,
-            top_n=limit
+            top_n=limit,
         )
 

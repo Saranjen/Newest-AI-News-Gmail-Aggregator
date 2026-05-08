@@ -1,7 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from .models import YouTubeVideo, OpenAIArticle, AnthropicArticle, Digest
+from .models import (
+    YouTubeVideo,
+    OpenAIArticle,
+    AnthropicArticle,
+    Digest,
+    DigestRecipient,
+    Subscriber,
+)
 from .connection import get_session
 
 
@@ -246,3 +253,99 @@ class Repository:
             for d in digests
         ]
 
+    def get_active_digest_recipients(self) -> List[Dict[str, Any]]:
+        rows = (
+            self.session.query(DigestRecipient)
+            .filter(DigestRecipient.is_active.is_(True))
+            .order_by(DigestRecipient.id.asc())
+            .all()
+        )
+        seen: set[str] = set()
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            e = (r.email or "").strip()
+            if not e:
+                continue
+            key = e.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            fn = (r.first_name or "").strip() or None
+            ln = (r.last_name or "").strip() or None
+            out.append({"email": e, "first_name": fn, "last_name": ln})
+        return out
+
+    def _subscriber_by_normalized_email(self, email: str) -> Optional[Subscriber]:
+        key = email.strip().lower()
+        return self.session.query(Subscriber).filter(Subscriber.email == key).first()
+
+    def get_subscribed_subscribers(self) -> List[Dict[str, Any]]:
+        rows = (
+            self.session.query(Subscriber)
+            .filter(Subscriber.is_subscribed.is_(True))
+            .order_by(Subscriber.email.asc())
+            .all()
+        )
+        return [
+            {
+                "email": (r.email or "").strip(),
+                "first_name": (r.first_name or "").strip() or None,
+                "last_name": (r.last_name or "").strip() or None,
+            }
+            for r in rows
+            if (r.email or "").strip()
+        ]
+
+    def upsert_subscriber_subscribe(
+        self,
+        email: str,
+        first_name: Optional[str],
+        last_name: Optional[str],
+    ) -> Subscriber:
+        key = email.strip().lower()
+        row = self._subscriber_by_normalized_email(key)
+        if row is None:
+            row = Subscriber(
+                email=key,
+                first_name=(first_name or "").strip() or None,
+                last_name=(last_name or "").strip() or None,
+                is_subscribed=True,
+                has_requested_demo=False,
+            )
+            self.session.add(row)
+        else:
+            if first_name and first_name.strip():
+                row.first_name = first_name.strip()
+            if last_name and last_name.strip():
+                row.last_name = last_name.strip()
+            row.is_subscribed = True
+        self.session.commit()
+        self.session.refresh(row)
+        return row
+
+    def upsert_subscriber_demo_request(
+        self,
+        email: str,
+        first_name: Optional[str],
+        last_name: Optional[str],
+    ) -> Subscriber:
+        key = email.strip().lower()
+        row = self._subscriber_by_normalized_email(key)
+        if row is None:
+            row = Subscriber(
+                email=key,
+                first_name=(first_name or "").strip() or None,
+                last_name=(last_name or "").strip() or None,
+                is_subscribed=False,
+                has_requested_demo=True,
+            )
+            self.session.add(row)
+        else:
+            if first_name and first_name.strip():
+                row.first_name = first_name.strip()
+            if last_name and last_name.strip():
+                row.last_name = last_name.strip()
+            row.has_requested_demo = True
+        self.session.commit()
+        self.session.refresh(row)
+        return row

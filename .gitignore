@@ -86,8 +86,11 @@ target/
 # Mypy cache
 .mypy_cache/
 
-# Virtual environment
-.venv/
+# Frontend (Vite)
+frontend/node_modules/
+
+# Built SPA output (optional: commit after `npm run build` for zero-config deploy)
+static/assets/
 
 # Alembic migrations
 app/alembic/versions/*

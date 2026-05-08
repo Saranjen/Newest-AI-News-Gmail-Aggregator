@@ -20,11 +20,58 @@ def _smtp_password() -> str:
 def _default_recipients() -> list[str]:
     explicit = (os.getenv("EMAIL_RECIPIENT") or "").strip()
     if explicit:
-        return [explicit]
+        return [p.strip() for p in explicit.split(",") if p.strip()]
     sender = _smtp_sender()
     if sender:
         return [sender]
     raise ValueError("Set EMAIL_RECIPIENT or EMAIL_SENDER/MY_EMAIL for recipients")
+
+
+def _recipients_from_env_digest_fallback() -> list[dict]:
+    raw = (os.getenv("EMAIL_RECIPIENT") or "").strip()
+    if not raw:
+        return []
+    fn = (os.getenv("DIGEST_FALLBACK_FIRST_NAME") or "").strip() or None
+    ln = (os.getenv("DIGEST_FALLBACK_LAST_NAME") or "").strip() or None
+    return [
+        {"email": p.strip(), "first_name": fn, "last_name": ln}
+        for p in raw.split(",")
+        if p.strip()
+    ]
+
+
+def get_digest_recipients() -> list[dict]:
+    """Resolve digest recipients: ``subscribers`` with ``is_subscribed`` first, then legacy ``digest_recipients``, then ``EMAIL_RECIPIENT``.
+
+    Each item is ``{"email": str, "first_name": str | None, "last_name": str | None}``.
+    Env: ``DIGEST_USE_SUBSCRIBERS_TABLE`` (default true), ``DIGEST_RECIPIENTS_FROM_DB`` for legacy table,
+    ``DIGEST_FALLBACK_FIRST_NAME`` / ``DIGEST_FALLBACK_LAST_NAME`` for env-only recipients.
+    """
+    use_subscribers = os.getenv("DIGEST_USE_SUBSCRIBERS_TABLE", "true").lower() in ("1", "true", "yes")
+    rows: list[dict] = []
+    if use_subscribers:
+        try:
+            from app.database.repository import Repository
+
+            rows = Repository().get_subscribed_subscribers()
+        except Exception:
+            rows = []
+    use_legacy = os.getenv("DIGEST_RECIPIENTS_FROM_DB", "true").lower() in ("1", "true", "yes")
+    if not rows and use_legacy:
+        try:
+            from app.database.repository import Repository
+
+            rows = Repository().get_active_digest_recipients()
+        except Exception:
+            rows = []
+    if not rows:
+        rows = _recipients_from_env_digest_fallback()
+    if not rows:
+        raise ValueError(
+            "No digest recipients: subscribe via /subscribe or add rows to subscribers / digest_recipients "
+            "or set EMAIL_RECIPIENT (comma-separated)."
+        )
+    return rows
 
 
 def send_email(subject: str, body_text: str, body_html: str = None, recipients: list = None):
@@ -42,21 +89,22 @@ def send_email(subject: str, body_text: str, body_html: str = None, recipients: 
     if not recipients:
         raise ValueError("No valid recipients provided")
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = sender
-    msg["To"] = ", ".join(recipients)
-    
-    part1 = MIMEText(body_text, "plain")
-    msg.attach(part1)
-    
-    if body_html:
-        part2 = MIMEText(body_html, "html")
-        msg.attach(part2)
-    
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(sender, password)
-        smtp.sendmail(sender, recipients, msg.as_string())
+        for to_addr in recipients:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = sender
+            msg["To"] = to_addr
+
+            part1 = MIMEText(body_text, "plain")
+            msg.attach(part1)
+
+            if body_html:
+                part2 = MIMEText(body_html, "html")
+                msg.attach(part2)
+
+            smtp.sendmail(sender, [to_addr], msg.as_string())
 
 
 def markdown_to_html(markdown_text: str) -> str:
