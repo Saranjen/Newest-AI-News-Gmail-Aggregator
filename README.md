@@ -1,6 +1,22 @@
 # AI News Gmail Aggregator
 
-A Python pipeline that collects AI-related **YouTube videos**, **OpenAI news articles**, and **Anthropic-linked articles** from public feeds, stores them in **PostgreSQL**, generates short **LLM digests**, ranks content for relevance, and sends a **daily HTML email** digest via **Gmail**.
+A Python pipeline that collects AI-related **YouTube videos**, **OpenAI news articles**, and **Anthropic-linked articles** from public feeds, stores them in **PostgreSQL**, generates short **LLM digests**, ranks content for relevance, and sends a **daily HTML email** digest via **Gmail**. It also exposes a small **web subscriber UI** (FastAPI + Vite/React) for signup and sample emails.
+
+---
+
+## Production deployment
+
+**Live app:** [https://newest-ai-news-gmail-aggregator-tes.vercel.app/](https://newest-ai-news-gmail-aggregator-tes.vercel.app/) — open this URL to use the subscription form (daily digest signup and “send sample digest”). The same deployment serves the **FastAPI** endpoints (`/health`, `/subscribe`, `/demo`) and the built React SPA.
+
+| Piece | Hosting |
+|--------|---------|
+| **PostgreSQL** | **[Neon](https://neon.tech)** — serverless Postgres in the cloud. Use Neon’s connection string as **`DATABASE_URL`** for production (TLS-friendly URLs work with `sslmode=require` as needed). This project uses Neon for the database backing subscribers, digests, and the GitHub Actions daily job. |
+| **Subscriber UI + HTTP API** | **[Vercel](https://vercel.com)** — single Git repo; FastAPI is deployed as Vercel’s [FastAPI / Python runtime](https://vercel.com/docs/frameworks/backend/fastapi) (`app.api.server:app` via [`pyproject.toml`](pyproject.toml) `[tool.vercel]`). The UI lives in [`frontend/`](frontend/) (Vite + React). **Production builds on Vercel** emit assets under **`app/spa_dist/`** so `index.html` and hashed JS/CSS are included in the serverless bundle (see [`app/api/server.py`](app/api/server.py)). Python deps on Vercel are intentionally slim — [`requirements-vercel.txt`](requirements-vercel.txt) — so the deploy stays under platform size limits; the **full** scrape pipeline still uses [`requirements.txt`](requirements.txt) locally and in GitHub Actions. |
+| **Scheduled pipeline & email** | **GitHub Actions** — [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) runs `python -m app.jobs.daily_digest` on a cron; point **`DATABASE_URL`** at the **same Neon** database so Actions and the live site share one source of truth. |
+
+Configure the **Vercel project → Settings → Environment Variables** with the same kinds of values as your `.env` at minimum: **`DATABASE_URL`** (Neon), **`OPENAI_API_KEY`**, **`MY_EMAIL`**, **`APP_PASSWORD`**, and any other vars your subscribe/demo routes need. Optional: **`VITE_API_BASE_URL`** only if the UI is hosted on a different origin than the API (same deployment omits it).
+
+CLI entry **`run_daily_pipeline.py`** (replacing a root `main.py`) keeps Vercel from mistaking the pipeline script for the FastAPI app during detection.
 
 ---
 
@@ -16,6 +32,7 @@ Entry points:
 
 - `python run_daily_pipeline.py` — same pipeline; optional CLI args `[hours] [top_n]`.
 - `python -m app.jobs.daily_digest` — intended for **cron / GitHub Actions** (ensures schema, then runs the full pipeline).
+- `uvicorn app.api.server:app --host 0.0.0.0 --port 8000` — **HTTP API** plus static UI: `GET /health`, `POST /subscribe`, `POST /demo` (after `cd frontend && npm run build` for local static output under `static/`).
 
 ---
 
@@ -53,10 +70,12 @@ Entry points:
 | Layer | Choice |
 |--------|--------|
 | Language | **Python 3.12+** |
-| Data store | **PostgreSQL** |
+| Data store | **PostgreSQL** (local Docker; production **[Neon](https://neon.tech)**) |
 | ORM / DB access | **SQLAlchemy 2.x** + **psycopg2-binary** |
 | LLM | **OpenAI** API (`openai` Python SDK) |
 | Email | **Gmail** over **SMTP** (TLS), app passwords |
+| Subscriber UI | **Vite** + **React** + **TypeScript** ([`frontend/`](frontend/)) |
+| Live API + UI | **FastAPI** on **[Vercel](https://vercel.com)** ([`app/api/server.py`](app/api/server.py), [`vercel.json`](vercel.json)) |
 | Automation | **GitHub Actions** (`ubuntu-latest`, cron + `workflow_dispatch`) |
 | Local DB | **Docker Compose** (see [`docker/docker-compose.yml`](docker/docker-compose.yml); default host port **5433**) |
 
@@ -119,7 +138,7 @@ After cloning, create **`.env`** in the repo root. It should contain the followi
 | `OPENAI_API_KEY` | OpenAI API key for digest, curation, and email agents. |
 | `MY_EMAIL` | Gmail address used as SMTP login and default “from” / recipient when `EMAIL_RECIPIENT` is unset. |
 | `APP_PASSWORD` | Gmail [app password](https://support.google.com/accounts/answer/185833) for `MY_EMAIL`. |
-| `DATABASE_URL` | Full Postgres URI. **Locally:** only used if `USE_DATABASE_URL=true` (otherwise ignored in favor of `POSTGRES_*`). **On GitHub Actions:** set as a secret; `GITHUB_ACTIONS=true` enables this URL. |
+| `DATABASE_URL` | Full Postgres URI. **Locally:** only used if `USE_DATABASE_URL=true` (otherwise ignored in favor of `POSTGRES_*`). **On GitHub Actions:** set as a secret; `GITHUB_ACTIONS=true` enables this URL. **On Vercel:** set in project env; `VERCEL=1` uses this URL when present (e.g. Neon). |
 | `USE_DATABASE_URL` | Set to `true` to connect using `DATABASE_URL` on your machine; omit or `false` to use `POSTGRES_*` only. |
 | `POSTGRES_USER` | Postgres user (e.g. `postgres`). |
 | `POSTGRES_PASSWORD` | Postgres password. |
@@ -143,7 +162,7 @@ The digest job logs **`Database target: host=... db=...`** (no password) so you 
 
 ## Automation (GitHub Actions)
 
-**Idea:** Run **PostgreSQL** on a host reachable from the internet (Neon, Supabase, Railway, Render, or your own). Copy the provider’s **connection string** and store it as the **`DATABASE_URL` secret** in GitHub, together with OpenAI and Gmail secrets. The workflow [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) runs **once per day** at **13:00 UTC** by default (`cron: "0 13 * * *"`) and executes `python -m app.jobs.daily_digest`, so **digest generation and email run automatically** on that schedule without your laptop.
+**Idea:** Run **PostgreSQL** on a host reachable from the internet. This project’s production setup uses **[Neon](https://neon.tech)** for `DATABASE_URL`; alternatives include Supabase, Railway, Render, or your own server. Copy the provider’s **connection string** and store it as the **`DATABASE_URL` secret** in GitHub, together with OpenAI and Gmail secrets. The workflow [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) runs **once per day** at **13:00 UTC** by default (`cron: "0 13 * * *"`) and executes `python -m app.jobs.daily_digest`, so **digest generation and email run automatically** on that schedule without your laptop.
 
 The workflow runs `pip install -r requirements.txt` then the digest module, and supports **Run workflow** (manual) from the Actions tab.
 
@@ -171,18 +190,23 @@ The Actions database is **separate** from local Docker unless you point both at 
 ### Optional workflow tweaks
 
 - Edit **`cron`** in [`.github/workflows/daily-news.yml`](.github/workflows/daily-news.yml) for a different **UTC** time.
-- The workflow sets **`PIPELINE_HOURS: "72"`** for RSS lookback in CI; change or remove in YAML if you prefer.
+- **`PIPELINE_HOURS`**, **`EMAIL_DIGEST_HOURS`**, and related values come from **repository secrets** (with optional **Variables** fallback for sender email); adjust secrets instead of hardcoding in YAML unless you change the workflow file.
 
 ---
 
 ## Project layout (high level)
 
+- `frontend/` — Vite + React subscriber UI (`npm run build` → `static/` locally, `app/spa_dist/` when `VERCEL=1`)
+- `app/api/server.py` — FastAPI app (`/health`, `/subscribe`, `/demo`) and static file mount for the SPA
 - `app/scrapers/` — YouTube, OpenAI, Anthropic RSS ingestion  
 - `app/database/` — SQLAlchemy models, connection, repository  
 - `app/services/` — Markdown/transcript processing, digest generation, email send  
 - `app/agent/` — OpenAI-backed agents (digest, curation, email)  
 - `app/daily_runner.py` — Orchestrates the five pipeline stages  
 - `app/jobs/daily_digest.py` — Automation entrypoint  
+- `run_daily_pipeline.py` — CLI wrapper for the full pipeline (avoid naming it `main.py` for Vercel compatibility)
+- `requirements-vercel.txt` — Minimal Python deps for the Vercel FastAPI deployment only  
+- `vercel.json` — Vercel install/build commands  
 - `.github/workflows/` — Scheduled GitHub Actions workflow  
 
 ---
