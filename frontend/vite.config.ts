@@ -12,7 +12,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "../static",
+    // On Vercel, static assets belong in repo-root `public/` (CDN); locally keep `static/` for uvicorn.
+    outDir: process.env.VERCEL ? "../public" : "../static",
     emptyOutDir: true,
   },
 });

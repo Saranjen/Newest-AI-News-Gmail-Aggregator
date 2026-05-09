@@ -91,6 +91,8 @@ frontend/node_modules/
 
 # Built SPA output (optional: commit after `npm run build` for zero-config deploy)
 static/assets/
+# Vercel FastAPI build writes hashed assets under repo-root public/
+public/assets/
 
 # Alembic migrations
 app/alembic/versions/*

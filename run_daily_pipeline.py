@@ -18,4 +18,3 @@ if __name__ == "__main__":
 
     result = main(hours=hours, top_n=top_n)
     exit(0 if result["success"] else 1)
-

@@ -14,7 +14,7 @@ A Python pipeline that collects AI-related **YouTube videos**, **OpenAI news art
 
 Entry points:
 
-- `python main.py` — same pipeline; optional CLI args `[hours] [top_n]`.
+- `python run_daily_pipeline.py` — same pipeline; optional CLI args `[hours] [top_n]`.
 - `python -m app.jobs.daily_digest` — intended for **cron / GitHub Actions** (ensures schema, then runs the full pipeline).
 
 ---
@@ -104,7 +104,7 @@ Leave `DATABASE_URL` empty and `USE_DATABASE_URL` unset or empty for typical **l
 
 3. Start Postgres (e.g. `docker compose -f docker/docker-compose.yml up -d`).
 4. Create tables: `python app/database/create_tables.py`
-5. Run the pipeline: `python main.py` or `python -m app.jobs.daily_digest`
+5. Run the pipeline: `python run_daily_pipeline.py` or `python -m app.jobs.daily_digest`
 
 ---
 

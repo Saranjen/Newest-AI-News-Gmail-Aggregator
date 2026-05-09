@@ -26,3 +26,7 @@ dependencies = [
 dev = [
     "ipykernel>=7.1.0",
 ]
+
+# Tell Vercel which module exposes the FastAPI application (see root run_daily_pipeline.py — not HTTP).
+[tool.vercel]
+entrypoint = "app.api.server:app"

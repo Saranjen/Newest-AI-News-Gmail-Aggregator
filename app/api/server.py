@@ -1,12 +1,15 @@
-"""HTTP API for subscriber signup + sample digest. Serves the Vite-built SPA from ``static/``.
+"""HTTP API for subscriber signup + sample digest.
+
+Locally, serves the Vite-built SPA from ``static/``. On Vercel (``VERCEL=1``), assets are served from ``public/`` by the platform — FastAPI does not mount static files there.
 
 Run API (repo root): ``uvicorn app.api.server:app --reload --host 127.0.0.1 --port 8000``
 
 Develop UI with hot reload (proxies to API): ``cd frontend && npm install && npm run dev``
-Then open Vite’s URL (e.g. http://127.0.0.1:5173). Production bundle: ``cd frontend && npm run build`` (writes to ``static/``).
+Then open Vite’s URL (e.g. http://127.0.0.1:5173). Production bundle: ``cd frontend && npm run build`` (writes to ``static/`` locally, ``public/`` when ``VERCEL`` is set).
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -89,5 +92,5 @@ def demo(body: SubscriberBody):
     }
 
 
-if STATIC_DIR.is_dir():
+if STATIC_DIR.is_dir() and os.getenv("VERCEL") != "1":
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
