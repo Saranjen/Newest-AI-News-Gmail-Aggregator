@@ -21,11 +21,15 @@ jobs:
 
       - name: Run daily digest
         env:
+          GITHUB_ACTIONS: "true"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # SMTP login + From: prefer EMAIL_SENDER; if unset, app uses MY_EMAIL (same Gmail as app password).
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          MY_EMAIL: ${{ secrets.MY_EMAIL }}
+          # Optional: comma-separated fallback only if DB has no subscribed rows (usually omit).
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           # Wider window helps when feeds are quiet or digests were created earlier
           PIPELINE_HOURS: "72"
         run: python -m app.jobs.daily_digest
