@@ -2,8 +2,15 @@ import { useState } from "react";
 
 type Status = { kind: "idle" } | { kind: "ok"; text: string } | { kind: "err"; text: string };
 
+/** Production API origin when the SPA is not served by FastAPI (e.g. Vercel → API on Railway). Leave unset for dev (Vite proxy) or same-origin deploys. */
+function apiUrl(path: string): string {
+  const base = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return base ? `${base}${p}` : p;
+}
+
 async function postJson(path: string, body: object): Promise<{ message?: string }> {
-  const r = await fetch(path, {
+  const r = await fetch(apiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
