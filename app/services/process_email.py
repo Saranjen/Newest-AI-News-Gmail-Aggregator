@@ -151,9 +151,34 @@ def generate_email_digest(
     return email_digest
 
 
+_DIGEST_EMAIL_SKIP_MESSAGES = frozenset(
+    ("No digests available", "Failed to rank articles")
+)
+
+
 def send_digest_email(hours: int = 24, top_n: int = 10) -> dict:
     try:
         article_details, total_ranked = _build_ranked_article_details(hours)
+    except ValueError as e:
+        detail = str(e).strip()
+        if detail in _DIGEST_EMAIL_SKIP_MESSAGES:
+            logger.info(
+                "Email step skipped: nothing to send for digest window (last %d hours). Reason: %s",
+                hours,
+                detail,
+            )
+            return {
+                "success": True,
+                "email_sent": False,
+                "skip_reason": detail,
+                "digest_lookback_hours": hours,
+                "articles_count": 0,
+                "recipients_count": 0,
+            }
+        logger.error("Error building digest email: %s", detail)
+        return {"success": False, "email_sent": False, "error": detail}
+
+    try:
         email_agent = EmailAgent(USER_PROFILE)
         recipients = get_digest_recipients()
         subject = f"Daily AI News Digest - {datetime.now().strftime('%B %d, %Y')}"
@@ -186,6 +211,7 @@ def send_digest_email(hours: int = 24, top_n: int = 10) -> dict:
         logger.info("Email sent successfully to %d recipient(s)", len(recipients))
         return {
             "success": True,
+            "email_sent": True,
             "subject": subject,
             "articles_count": articles_in_digest,
             "recipients_count": len(recipients),
@@ -194,15 +220,20 @@ def send_digest_email(hours: int = 24, top_n: int = 10) -> dict:
         logger.error("Error sending email: %s", e)
         return {
             "success": False,
+            "email_sent": False,
             "error": str(e),
         }
 
 
 if __name__ == "__main__":
     result = send_digest_email(hours=24, top_n=10)
-    if result["success"]:
+    if result["success"] and result.get("email_sent"):
         print("\n=== Email Digest Sent ===")
         print(f"Subject: {result['subject']}")
         print(f"Recipients: {result['recipients_count']}")
+    elif result["success"]:
+        print("\n=== Pipeline OK — email not sent ===")
+        print(f"Reason: {result.get('skip_reason', '')}")
+        print(f"(Digest window: last {result.get('digest_lookback_hours')} hours)")
     else:
         print(f"Error: {result['error']}")

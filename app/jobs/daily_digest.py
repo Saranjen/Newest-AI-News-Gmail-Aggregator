@@ -65,6 +65,12 @@ def main() -> int:
             "Daily digest job finished successfully (duration=%.1fs)",
             result.get("duration_seconds", 0),
         )
+        em = result.get("email") or {}
+        if em.get("success") and em.get("email_sent") is False:
+            logger.info(
+                "Daily email was not sent — no digest items in lookback window (%s).",
+                em.get("skip_reason", "skipped"),
+            )
         return 0
 
     logger.error(

@@ -105,16 +105,22 @@ def run_daily_pipeline(hours: Optional[int] = None, top_n: int = 10) -> dict:
         results["email"] = email_result
         
         if email_result["success"]:
-            logger.info(f"✓ Email sent successfully with {email_result['articles_count']} articles")
             results["success"] = True
+            if email_result.get("email_sent", True):
+                logger.info(
+                    "✓ Email sent successfully with %s articles",
+                    email_result["articles_count"],
+                )
+            else:
+                logger.info(
+                    "✓ Pipeline completed successfully; no email sent (no digest rows in "
+                    "last %s hours matching window — %s).",
+                    email_result.get("digest_lookback_hours", email_hours),
+                    email_result.get("skip_reason", "skipped"),
+                )
         else:
             err = email_result.get("error", "Unknown error")
-            logger.error(f"✗ Failed to send email: {err}")
-            if "No digests" in str(err):
-                logger.warning(
-                    "Hint: widen digest email lookback with EMAIL_DIGEST_HOURS=168, or RSS scrape with "
-                    "PIPELINE_HOURS=168; digests must have created_at within the email lookback."
-                )
+            logger.error("✗ Failed to send email: %s", err)
         
     except Exception as e:
         logger.error(f"Pipeline failed with error: {e}", exc_info=True)
@@ -132,7 +138,11 @@ def run_daily_pipeline(hours: Optional[int] = None, top_n: int = 10) -> dict:
     logger.info(f"Scraped: {results['scraping']}")
     logger.info(f"Processed: {results['processing']}")
     logger.info(f"Digests: {results['digests']}")
-    logger.info(f"Email: {'Sent' if results['success'] else 'Failed'}")
+    email_line = "Failed"
+    em = results.get("email") or {}
+    if em.get("success"):
+        email_line = "Sent" if em.get("email_sent", True) else f"Skipped — {em.get('skip_reason', 'no content')}"
+    logger.info(f"Email: {email_line}")
     logger.info("=" * 60)
     
     return results
