@@ -93,6 +93,8 @@ frontend/node_modules/
 static/assets/
 # Vercel FastAPI build writes hashed assets under repo-root public/
 public/assets/
+# Vercel / VERCEL=1 build outputs SPA next to Python package for serverless StaticFiles
+app/spa_dist/assets/
 
 # Alembic migrations
 app/alembic/versions/*

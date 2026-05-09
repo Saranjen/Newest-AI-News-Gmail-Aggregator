@@ -1,11 +1,11 @@
 """HTTP API for subscriber signup + sample digest.
 
-Locally, serves the Vite-built SPA from ``static/``. On Vercel (``VERCEL=1``), the SPA is built to ``public/`` and mounted here (same as local) so ``/`` and ``/assets/*`` resolve inside the serverless app.
+Locally, serves the Vite-built SPA from ``static/``. On Vercel, the SPA is built to ``app/spa_dist/`` so files exist inside the serverless bundle; ``StaticFiles`` mounts them at ``/`` (API routes above still win).
 
 Run API (repo root): ``uvicorn app.api.server:app --reload --host 127.0.0.1 --port 8000``
 
 Develop UI with hot reload (proxies to API): ``cd frontend && npm install && npm run dev``
-Then open Vite’s URL (e.g. http://127.0.0.1:5173). Production bundle: ``cd frontend && npm run build`` (writes to ``static/`` locally, ``public/`` when ``VERCEL`` is set).
+Then open Vite’s URL (e.g. http://127.0.0.1:5173). Production bundle: ``cd frontend && npm run build`` (writes to ``static/`` locally, ``app/spa_dist/`` when ``VERCEL`` is set).
 """
 from __future__ import annotations
 
@@ -26,6 +26,24 @@ load_project_env()
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = REPO_ROOT / "static"
 PUBLIC_DIR = REPO_ROOT / "public"
+SPA_DIST_DIR = REPO_ROOT / "app" / "spa_dist"
+
+
+def _is_vercel_runtime() -> bool:
+    return os.getenv("VERCEL", "").strip().lower() in ("1", "true", "yes")
+
+
+def _spa_mount_directory() -> Path | None:
+    """Directory containing Vite ``index.html`` + ``assets/`` for StaticFiles."""
+    if _is_vercel_runtime():
+        if SPA_DIST_DIR.is_dir():
+            return SPA_DIST_DIR
+        if PUBLIC_DIR.is_dir():
+            return PUBLIC_DIR
+        return None
+    if STATIC_DIR.is_dir():
+        return STATIC_DIR
+    return None
 
 
 class SubscriberBody(BaseModel):
@@ -94,6 +112,6 @@ def demo(body: SubscriberBody):
 
 
 # SPA: API routes above take precedence; mount serves ``/`` and hashed assets.
-_site_dir = PUBLIC_DIR if os.getenv("VERCEL") == "1" else STATIC_DIR
-if _site_dir.is_dir():
+_site_dir = _spa_mount_directory()
+if _site_dir is not None:
     app.mount("/", StaticFiles(directory=str(_site_dir), html=True), name="site")

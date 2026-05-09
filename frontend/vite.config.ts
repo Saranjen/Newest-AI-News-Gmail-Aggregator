@@ -12,8 +12,9 @@ export default defineConfig({
     },
   },
   build: {
-    // On Vercel, static assets belong in repo-root `public/` (CDN); locally keep `static/` for uvicorn.
-    outDir: process.env.VERCEL ? "../public" : "../static",
+    // Local: repo-root `static/` for uvicorn. Vercel: `app/spa_dist/` so hashed assets ship inside the
+    // Python bundle (repo-root `public/` is often CDN-only and missing from the serverless filesystem).
+    outDir: process.env.VERCEL ? "../app/spa_dist" : "../static",
     emptyOutDir: true,
   },
 });
