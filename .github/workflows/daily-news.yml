@@ -9,6 +9,24 @@ on:
 jobs:
   digest:
     runs-on: ubuntu-latest
+    # Job-level env so every step (and Python) sees the same SMTP vars — avoids empty MY_EMAIL if a step omits `env:`.
+    env:
+      GITHUB_ACTIONS: "true"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      USE_DATABASE_URL: ${{ secrets.USE_DATABASE_URL }}
+      # Repository secrets — names must match exactly (case-sensitive): EMAIL_SENDER and/or MY_EMAIL
+      EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+      MY_EMAIL: ${{ secrets.MY_EMAIL }}
+      EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+      # App accepts either env name; map common secret names from GitHub
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+      # Optional overrides (must appear under env: here — repo secrets alone do nothing)
+      PIPELINE_HOURS: ${{ secrets.PIPELINE_HOURS }}
+      EMAIL_DIGEST_HOURS: ${{ secrets.EMAIL_DIGEST_HOURS }}
+      DIGEST_RECIPIENTS_FROM_DB: ${{ secrets.DIGEST_RECIPIENTS_FROM_DB }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,17 +37,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Verify SMTP sender is configured
+        run: |
+          if [ -z "${MY_EMAIL:-}" ] && [ -z "${EMAIL_SENDER:-}" ]; then
+            echo "::error::Missing sender: add a Repository Actions secret named MY_EMAIL or EMAIL_SENDER (your Gmail address). Variables tab does not populate secrets.* — use Secrets. Names are case-sensitive."
+            exit 1
+          fi
+          echo "SMTP sender env is set (value not printed)."
+
       - name: Run daily digest
-        env:
-          GITHUB_ACTIONS: "true"
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          # SMTP login + From: prefer EMAIL_SENDER; if unset, app uses MY_EMAIL (same Gmail as app password).
-          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-          MY_EMAIL: ${{ secrets.MY_EMAIL }}
-          # Optional: comma-separated fallback only if DB has no subscribed rows (usually omit).
-          EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
-          GMAIL_APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-          # Wider window helps when feeds are quiet or digests were created earlier
-          PIPELINE_HOURS: "72"
         run: python -m app.jobs.daily_digest
