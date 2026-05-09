@@ -1,6 +1,6 @@
 """HTTP API for subscriber signup + sample digest.
 
-Locally, serves the Vite-built SPA from ``static/``. On Vercel (``VERCEL=1``), assets are served from ``public/`` by the platform — FastAPI does not mount static files there.
+Locally, serves the Vite-built SPA from ``static/``. On Vercel (``VERCEL=1``), the SPA is built to ``public/`` and mounted here (same as local) so ``/`` and ``/assets/*`` resolve inside the serverless app.
 
 Run API (repo root): ``uvicorn app.api.server:app --reload --host 127.0.0.1 --port 8000``
 
@@ -25,6 +25,7 @@ load_project_env()
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = REPO_ROOT / "static"
+PUBLIC_DIR = REPO_ROOT / "public"
 
 
 class SubscriberBody(BaseModel):
@@ -92,5 +93,7 @@ def demo(body: SubscriberBody):
     }
 
 
-if STATIC_DIR.is_dir() and os.getenv("VERCEL") != "1":
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+# SPA: API routes above take precedence; mount serves ``/`` and hashed assets.
+_site_dir = PUBLIC_DIR if os.getenv("VERCEL") == "1" else STATIC_DIR
+if _site_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(_site_dir), html=True), name="site")
