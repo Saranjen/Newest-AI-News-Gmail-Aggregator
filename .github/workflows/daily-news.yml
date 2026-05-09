@@ -15,13 +15,13 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       USE_DATABASE_URL: ${{ secrets.USE_DATABASE_URL }}
-      # Repository secrets — names must match exactly (case-sensitive): EMAIL_SENDER and/or MY_EMAIL
-      EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-      MY_EMAIL: ${{ secrets.MY_EMAIL }}
+      # Secrets take precedence; fall back to Repository variables (same names) if secrets are empty.
+      EMAIL_SENDER: ${{ secrets.EMAIL_SENDER || vars.EMAIL_SENDER }}
+      MY_EMAIL: ${{ secrets.MY_EMAIL || vars.MY_EMAIL }}
       EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
       # App accepts either env name; map common secret names from GitHub
-      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD || vars.GMAIL_APP_PASSWORD }}
+      APP_PASSWORD: ${{ secrets.APP_PASSWORD || vars.APP_PASSWORD }}
       # Optional overrides (must appear under env: here — repo secrets alone do nothing)
       PIPELINE_HOURS: ${{ secrets.PIPELINE_HOURS }}
       EMAIL_DIGEST_HOURS: ${{ secrets.EMAIL_DIGEST_HOURS }}
@@ -39,11 +39,20 @@ jobs:
 
       - name: Verify SMTP sender is configured
         run: |
-          if [ -z "${MY_EMAIL:-}" ] && [ -z "${EMAIL_SENDER:-}" ]; then
-            echo "::error::Missing sender: add a Repository Actions secret named MY_EMAIL or EMAIL_SENDER (your Gmail address). Variables tab does not populate secrets.* — use Secrets. Names are case-sensitive."
-            exit 1
-          fi
-          echo "SMTP sender env is set (value not printed)."
+          python << 'PY'
+          import os, sys
+          s = (os.getenv("MY_EMAIL") or os.getenv("EMAIL_SENDER") or "").strip()
+          if not s:
+              print("::error::Missing sender: set Repository secret or variable MY_EMAIL or EMAIL_SENDER to your Gmail address (no spaces-only values). secrets.MY_EMAIL must be non-empty in Actions env.")
+              sys.exit(1)
+          print("SMTP sender is non-empty after strip (address not printed).")
+          PY
 
       - name: Run daily digest
+        env:
+          # Repeat job env so this step always receives sender/password even if the job definition changes.
+          MY_EMAIL: ${{ secrets.MY_EMAIL || vars.MY_EMAIL }}
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER || vars.EMAIL_SENDER }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD || vars.APP_PASSWORD }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD || vars.GMAIL_APP_PASSWORD }}
         run: python -m app.jobs.daily_digest

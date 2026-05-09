@@ -3,14 +3,19 @@ import smtplib
 import html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from dotenv import load_dotenv
 import markdown
 
-load_dotenv()
+from app.load_env import load_project_env
+
+load_project_env()
 
 
 def _smtp_sender() -> str:
-    return (os.getenv("EMAIL_SENDER") or os.getenv("MY_EMAIL") or "").strip()
+    for key in ("EMAIL_SENDER", "MY_EMAIL"):
+        v = (os.getenv(key) or "").strip()
+        if v:
+            return v
+    return ""
 
 
 def _smtp_password() -> str:

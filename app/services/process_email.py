@@ -2,9 +2,9 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from dotenv import load_dotenv
+from app.load_env import load_project_env
 
-load_dotenv()
+load_project_env()
 
 from app.agent.email_agent import EmailAgent, RankedArticleDetail, EmailDigestResponse
 from app.agent.curator_agent import CuratorAgent
